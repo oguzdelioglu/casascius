@@ -3,15 +3,12 @@ package main
 import (
 	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"hash"
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -23,13 +20,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"github.com/gosuri/uilive"
-	"github.com/jbenet/go-base58"
-
-	//boom "github.com/tylertreat/BoomFilters"
 
 	boom "github.com/bits-and-blooms/bloom/v3"
-	//rpcclient "github.com/stevenroose/go-bitcoin-core-rpc"
-	"golang.org/x/crypto/ripemd160"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -39,7 +31,7 @@ var walletInsert_opt *bool = flag.Bool("wi", false, "true")
 var phraseCount_opt *int = flag.Int("pc", 29, "29")
 var input_opt *string = flag.String("i", "phrases.txt", "phrases.txt")
 var output_opt *string = flag.String("o", "bingo.txt", "bingo.txt")
-var thread_opt *int = flag.Int("t", 4, "1")
+var thread_opt *int = flag.Int("t", 1, "1")
 var verbose_opt *bool = flag.Bool("v", false, "false")
 
 var addressList, wordList []string
@@ -100,28 +92,6 @@ func main() {
 	fmt.Println("Wallets Loaded")
 
 	wordlistCount = len(wordList)
-
-	// //_____________Bloom Test
-	// var testFind uint64 = 0
-	// var testNoFind uint64 = 0
-	// for _, adres := range addressList {
-	// 	if sbf.Test([]byte(adres)) {
-	// 		testFind++
-	// 	} else {
-	// 		testNoFind++
-	// 	}
-	// }
-	// fmt.Println("Total:", len(addressList))
-	// fmt.Println("FindTotal:", testFind)
-	// fmt.Println("NoFind:", testNoFind)
-	// //_____________Bloom Test
-
-	//GeneratorFull("SymcR374ukWS48XCfENrDPGaYagFpG")
-	//os.Exit(0)
-
-	// if sbf.Test([]byte(AddressToRIPEM160(`15Jp2rPA5zbEZV4rwCSLufreJWyJUfyA58`))) {
-	// 	fmt.Println("contains b")
-	// }
 
 	if *walletInsert_opt {
 		createDB()
@@ -228,36 +198,26 @@ func Brute(id int, wg *sync.WaitGroup) {
 	}
 }
 
-func checkBalance(wallet string) string {
-	resp, err := http.Get(BalanceAPI + wallet)
-	if err != nil {
-		fmt.Println(err)
-		return "0.00000000"
+func RandomPhrase(length int) string {
+	var letters [57]string = [57]string{"A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "2", "3", "4", "5", "6", "7", "8", "9"}
+	hasher := sha256.New()
+check:
+	serial := "S"
+	for i := 1; i < length; i++ {
+		serial += letters[rand.Intn(len(letters))]
 	}
-	var generic map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&generic)
-	if err != nil {
-		fmt.Println(err)
-		return "0.00000000"
+	t := serial + "?"
+	sha := SHA256(hasher, []byte(t))
+	hashCheck := hasher.Sum(sha)
+	//fmt.Println(serial, hashCheck[0], t)
+	if hashCheck[0] == '\x00' {
+		//fmt.Println(serial, hashCheck[0], t)
+		//os.Exit(0)
+		return serial
 	} else {
-		if generic["data"] != nil {
-			balance := fmt.Sprint(generic["data"].(map[string]interface{})["confirmed_balance"])
-			if balance != "0.00000000" && balance != "<nil>" {
-				totalBalancedAddress++
-				return balance
-			} else {
-				return balance
-			}
-		} else {
-			return "0.00000000"
-		}
+		goto check
 	}
 }
-
-func RemoveIndex(s []string, index int) []string {
-	return append(s[:index], s[index+1:]...)
-}
-
 func GeneratorFull(passphrase string) Wallet {
 	hasher := sha256.New() // SHA256
 	sha := SHA256(hasher, []byte(passphrase))
@@ -273,11 +233,14 @@ func GeneratorFull(passphrase string) Wallet {
 	// return Wallet{addressUncompressed: uaddr.EncodeAddress(), addressCompressed: caddr.EncodeAddress(), passphrase: passphrase} // Send line to output channel
 }
 
-func AddressToRIPEM160(address string) string {
-	baseBytes := base58.Decode(address)
-	end := len(baseBytes) - 4
-	hash := baseBytes[0:end]
-	return hex.EncodeToString(hash)[2:]
+// SHA256 Hasher function
+func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
+
+	hasher.Reset()
+	hasher.Write(input)
+	hash = hasher.Sum(nil)
+	return hash
+
 }
 
 func SaveWallet(walletInfo Wallet, path string) {
@@ -375,63 +338,4 @@ func insertaddress(db *sql.DB, hash string) {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-}
-
-func displayHashs(db *sql.DB) {
-	row, err := db.Query("SELECT * FROM address")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer row.Close()
-	for row.Next() {
-		var hashwallet string
-		row.Scan(&hashwallet)
-		//log.Println("Wallet: ", hashwallet)
-	}
-}
-
-func RandomPhrase(length int) string {
-	var letters [58]string = [58]string{"A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "2", "3", "4", "5", "6", "7", "8", "9"}
-	serial := letters[rand.Intn(len(letters))]
-	for i := 1; i < length; i++ {
-		serial += letters[rand.Intn(len(letters))]
-	}
-	return "S" + serial
-}
-
-func randInt(min int, max int) int {
-	return min + rand.Intn(max-min)
-}
-
-// SHA256 Hasher function
-func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
-
-	hasher.Reset()
-	hasher.Write(input)
-	hash = hasher.Sum(nil)
-	return hash
-
-}
-
-// RIPEMD160 Hasher function
-func RIPEMD160(input []byte) (hash []byte) {
-
-	riper := ripemd160.New()
-	riper.Write(input)
-	hash = riper.Sum(nil)
-	return hash
-
-}
-
-func appendWordlist(a []string, b []string) []string {
-	check := make(map[string]int)
-	d := append(a, b...)
-	res := make([]string, 0)
-	for _, val := range d {
-		check[val] = 1
-	}
-	for letter, _ := range check {
-		res = append(res, letter)
-	}
-	return res
 }
