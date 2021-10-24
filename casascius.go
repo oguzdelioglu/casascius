@@ -183,10 +183,11 @@ func Brute(id int, wg *sync.WaitGroup) {
 	for { ////Elapsed Time 0.0010003
 
 		var randomPhrase = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
-
+		//var randomPhrase = "SymcR374ukWS48XCfENrDPGaYagFpG"//For test
 		randomWallet := GeneratorFull(randomPhrase) //Elapsed Time 0.0010002
 		//fmt.Println(randomWallet.base58BitcoinAddress)
 
+		//SaveWallet(randomWallet, "test.txt")
 		if sbf.Test([]byte(randomWallet.addressUncompressed)) {
 			SaveWallet(randomWallet, *output_opt)
 			if CheckWallet(sqliteDatabase, randomWallet.addressUncompressed) {
