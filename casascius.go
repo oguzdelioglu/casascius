@@ -182,15 +182,15 @@ func Brute(id int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for { ////Elapsed Time 0.0010003
 
-		var randomPhrase, sha = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
+		var randomPhrase = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
 
-		randomWallet := GeneratorFull(randomPhrase, sha) //Elapsed Time 0.0010002
+		randomWallet := GeneratorFull(randomPhrase) //Elapsed Time 0.0010002
 		//fmt.Println(randomWallet.base58BitcoinAddress)
 
 		if sbf.Test([]byte(randomWallet.addressUncompressed)) {
-			SaveWallet(randomWallet, *output_opt, sha)
+			SaveWallet(randomWallet, *output_opt)
 			if CheckWallet(sqliteDatabase, randomWallet.addressUncompressed) {
-				SaveWallet(randomWallet, "balance_wallets.txt", sha)
+				SaveWallet(randomWallet, "balance_wallets.txt")
 				totalBalancedAddress++
 			}
 			totalFound++
@@ -199,7 +199,7 @@ func Brute(id int, wg *sync.WaitGroup) {
 	}
 }
 
-func RandomPhrase(length int) (string, []byte) {
+func RandomPhrase(length int) string {
 	hasher := sha256.New()
 check:
 	serial := "S"
@@ -219,7 +219,7 @@ check:
 	}
 	//fmt.Println(serial, hashCheck[0], charstest)
 	//os.Exit(0)
-	return serial, sha
+	return serial
 }
 func replaceAtIndex(in string, r rune, i int) string {
 	out := []rune(in)
@@ -227,9 +227,9 @@ func replaceAtIndex(in string, r rune, i int) string {
 	return string(out)
 }
 
-func GeneratorFull(passphrase string, sha []byte) Wallet {
-	// hasher := sha256.New() // SHA256
-	// sha := SHA256(hasher, []byte(passphrase))
+func GeneratorFull(passphrase string) Wallet {
+	hasher := sha256.New() // SHA256
+	sha := SHA256(hasher, []byte(passphrase))
 	_, public := btcec.PrivKeyFromBytes(btcec.S256(), sha)
 
 	// Get compressed and uncompressed addresses
@@ -252,8 +252,8 @@ func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
 
 }
 
-func SaveWallet(walletInfo Wallet, path string, sha []byte) {
-	fullWallet := GeneratorFull(walletInfo.passphrase, sha)
+func SaveWallet(walletInfo Wallet, path string) {
+	fullWallet := GeneratorFull(walletInfo.passphrase)
 	f, err := os.OpenFile(path,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
