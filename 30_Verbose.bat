@@ -1,0 +1,1 @@
+casascius.exe -v=true

@@ -28,13 +28,14 @@ import (
 
 var walletList_opt *string = flag.String("w", "wallets.txt", "wallets.txt")
 var walletInsert_opt *bool = flag.Bool("wi", false, "true")
-var phraseCount_opt *int = flag.Int("pc", 29, "29")
+var phraseCount_opt *int = flag.Int("pc", 30, "30")
 var input_opt *string = flag.String("i", "phrases.txt", "phrases.txt")
 var output_opt *string = flag.String("o", "bingo.txt", "bingo.txt")
 var thread_opt *int = flag.Int("t", 1, "1")
 var verbose_opt *bool = flag.Bool("v", false, "false")
 
 var addressList, wordList []string
+var letters [57]string = [57]string{"A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "2", "3", "4", "5", "6", "7", "8", "9"}
 
 type Wallet struct {
 	addressCompressed   string
@@ -83,6 +84,8 @@ func main() {
 
 	fmt.Println("Wordlist Count:", len(wordList))
 	fmt.Println("Total Address:", uint(addressCount))
+
+	rand.Seed(time.Now().UnixNano()) // Random komutunun aynı değeri vermemesi için
 
 	sbf = boom.NewWithEstimates(uint(addressCount), 0.0000001) //0.00000000000000000001  0.0000001
 
@@ -179,17 +182,15 @@ func Brute(id int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for { ////Elapsed Time 0.0010003
 
-		var randomPhrase string
+		var randomPhrase, sha = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
 
-		randomPhrase = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
-
-		randomWallet := GeneratorFull(randomPhrase) //Elapsed Time 0.0010002
+		randomWallet := GeneratorFull(randomPhrase, sha) //Elapsed Time 0.0010002
 		//fmt.Println(randomWallet.base58BitcoinAddress)
 
 		if sbf.Test([]byte(randomWallet.addressUncompressed)) {
-			SaveWallet(randomWallet, *output_opt)
+			SaveWallet(randomWallet, *output_opt, sha)
 			if CheckWallet(sqliteDatabase, randomWallet.addressUncompressed) {
-				SaveWallet(randomWallet, "balance_wallets.txt")
+				SaveWallet(randomWallet, "balance_wallets.txt", sha)
 				totalBalancedAddress++
 			}
 			totalFound++
@@ -198,29 +199,37 @@ func Brute(id int, wg *sync.WaitGroup) {
 	}
 }
 
-func RandomPhrase(length int) string {
-	var letters [57]string = [57]string{"A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "2", "3", "4", "5", "6", "7", "8", "9"}
+func RandomPhrase(length int) (string, []byte) {
 	hasher := sha256.New()
 check:
 	serial := "S"
+
 	for i := 1; i < length; i++ {
+		// serial = append(serial, letters[rand.Intn(len(letters))])
 		serial += letters[rand.Intn(len(letters))]
 	}
-	t := serial + "?"
-	sha := SHA256(hasher, []byte(t))
+	charstest := serial + "?"
+
+	sha := SHA256(hasher, []byte(charstest))
 	hashCheck := hasher.Sum(sha)
-	//fmt.Println(serial, hashCheck[0], t)
-	if hashCheck[0] == '\x00' {
-		//fmt.Println(serial, hashCheck[0], t)
-		//os.Exit(0)
-		return serial
-	} else {
+
+	if hashCheck[0] != '\x00' {
+		//hashCheck = hasher.Sum(sha)
 		goto check
 	}
+	//fmt.Println(serial, hashCheck[0], charstest)
+	//os.Exit(0)
+	return serial, sha
 }
-func GeneratorFull(passphrase string) Wallet {
-	hasher := sha256.New() // SHA256
-	sha := SHA256(hasher, []byte(passphrase))
+func replaceAtIndex(in string, r rune, i int) string {
+	out := []rune(in)
+	out[i] = r
+	return string(out)
+}
+
+func GeneratorFull(passphrase string, sha []byte) Wallet {
+	// hasher := sha256.New() // SHA256
+	// sha := SHA256(hasher, []byte(passphrase))
 	_, public := btcec.PrivKeyFromBytes(btcec.S256(), sha)
 
 	// Get compressed and uncompressed addresses
@@ -243,8 +252,8 @@ func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
 
 }
 
-func SaveWallet(walletInfo Wallet, path string) {
-	fullWallet := GeneratorFull(walletInfo.passphrase)
+func SaveWallet(walletInfo Wallet, path string, sha []byte) {
+	fullWallet := GeneratorFull(walletInfo.passphrase, sha)
 	f, err := os.OpenFile(path,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

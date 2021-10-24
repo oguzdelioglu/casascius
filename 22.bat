@@ -1,1 +1,1 @@
-casascius.exe -t=24 -pc=21
+casascius.exe -pc=22 -v

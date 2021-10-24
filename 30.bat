@@ -1,1 +1,1 @@
-casascius.exe -t=24
+casascius.exe
