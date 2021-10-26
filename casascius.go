@@ -55,10 +55,11 @@ var totalBalancedAddress uint64 = 0
 var BalanceAPI string = "https://sochain.com/api/v2/get_address_balance/bitcoin/" //API
 
 var sqliteDatabase *sql.DB
-
 var sbf *boom.BloomFilter
 
 func main() {
+	rand.Seed(time.Now().UnixNano()) // Random komutunun aynı değeri vermemesi için
+
 	flag.Parse()
 
 	wordListRead, _ := ioutil.ReadFile(*input_opt)
@@ -181,12 +182,11 @@ func Brute(id int, wg *sync.WaitGroup) {
 	//fmt.Println(id)
 	defer wg.Done()
 	for { ////Elapsed Time 0.0010003
-
+		total++
 		var randomPhrase = RandomPhrase(*phraseCount_opt) //Elapsed Time 0.000999
 		//var randomPhrase = "SymcR374ukWS48XCfENrDPGaYagFpG"//For test
 		randomWallet := GeneratorFull(randomPhrase) //Elapsed Time 0.0010002
 		//fmt.Println(randomWallet.base58BitcoinAddress)
-
 		//SaveWallet(randomWallet, "test.txt")
 		if sbf.Test([]byte(randomWallet.addressUncompressed)) {
 			SaveWallet(randomWallet, *output_opt)
@@ -196,31 +196,68 @@ func Brute(id int, wg *sync.WaitGroup) {
 			}
 			totalFound++
 		}
-		total++
 	}
 }
 
 func RandomPhrase(length int) string {
-	hasher := sha256.New()
-check:
-	serial := "S"
-
-	for i := 1; i < length; i++ {
-		// serial = append(serial, letters[rand.Intn(len(letters))])
-		serial += letters[rand.Intn(len(letters))]
-	}
-	charstest := serial + "?"
-
-	sha := SHA256(hasher, []byte(charstest))
-	hashCheck := hasher.Sum(sha)
-
-	if hashCheck[0] != '\x00' {
-		//hashCheck = hasher.Sum(sha)
-		goto check
-	}
-	//fmt.Println(serial, hashCheck[0], charstest)
+	var miniKey, charstest = generateMiniKey(length)
+	//fmt.Println(miniKey, sha[0], charstest)
 	//os.Exit(0)
-	return serial
+	hasher := sha256.New()
+	for SHA256(hasher, []byte(charstest))[0] != '\x00' {
+		// As long as key doesn't pass typo check, increment it.
+		for i := len(miniKey) - 1; i >= 0; i-- {
+			c := rune(miniKey[i])
+			if c == '9' {
+				miniKey = replaceAtIndex(miniKey, 'A', i)
+				charstest = replaceAtIndex(charstest, 'A', i)
+				break
+			} else if c == 'H' {
+				miniKey = replaceAtIndex(miniKey, 'J', i)
+				charstest = replaceAtIndex(charstest, 'J', i)
+				break
+			} else if c == 'N' {
+				miniKey = replaceAtIndex(miniKey, 'P', i)
+				charstest = replaceAtIndex(charstest, 'P', i)
+				break
+			} else if c == 'Z' {
+				miniKey = replaceAtIndex(miniKey, 'a', i)
+				charstest = replaceAtIndex(charstest, 'a', i)
+				break
+			} else if c == 'k' {
+				miniKey = replaceAtIndex(miniKey, 'm', i)
+				charstest = replaceAtIndex(charstest, 'm', i)
+				break
+			} else if c == 'z' {
+				miniKey = replaceAtIndex(miniKey, '2', i)
+				charstest = replaceAtIndex(charstest, '2', i)
+				// No break - let loop increment prior character.
+			} else {
+				c++
+				miniKey = replaceAtIndex(miniKey, c, i)
+				charstest = replaceAtIndex(charstest, c, i)
+				break
+				// fmt.Println(c)
+			}
+		}
+	}
+
+	// if hashCheck[0] != '\x00' {
+	// 	//hashCheck = hasher.Sum(sha)
+	// 	goto check
+	// }
+	//fmt.Println(miniKey)
+	// f, err := os.OpenFile("test.txt",
+	// 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
+	// defer f.Close()
+	// if _, err := f.WriteString(miniKey + "\n"); err != nil {
+	// 	log.Println(err)
+	// }
+
+	return miniKey
 }
 func replaceAtIndex(in string, r rune, i int) string {
 	out := []rune(in)
@@ -228,7 +265,21 @@ func replaceAtIndex(in string, r rune, i int) string {
 	return string(out)
 }
 
+func generateMiniKey(length int) (string, string) {
+	miniKey := "S"
+	for i := 1; i < length; i++ {
+		miniKey += letters[rand.Intn(len(letters))]
+	}
+	charstest := miniKey + "?"
+	return miniKey, charstest
+}
+func timeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	log.Printf("%s took %s", name, elapsed)
+}
+
 func GeneratorFull(passphrase string) Wallet {
+	// defer timeTrack(time.Now(), "GeneratorFull")
 	hasher := sha256.New() // SHA256
 	sha := SHA256(hasher, []byte(passphrase))
 	_, public := btcec.PrivKeyFromBytes(btcec.S256(), sha)
@@ -245,12 +296,10 @@ func GeneratorFull(passphrase string) Wallet {
 
 // SHA256 Hasher function
 func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
-
 	hasher.Reset()
 	hasher.Write(input)
 	hash = hasher.Sum(nil)
 	return hash
-
 }
 
 func SaveWallet(walletInfo Wallet, path string) {
