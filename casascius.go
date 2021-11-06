@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -64,9 +65,10 @@ var sqliteDatabase *sql.DB
 var sbf *boom.BloomFilter
 
 func main() {
-	hostname, _ := os.Hostname()
 
-	rand.Seed(time.Now().UnixNano()) // Random komutunun aynı değeri vermemesi için
+	hostname, _ := os.Hostname()
+	runtime.GOMAXPROCS(runtime.NumCPU()) //Max Core
+	rand.Seed(time.Now().UnixNano())     // Random komutunun aynı değeri vermemesi için
 
 	flag.Parse()
 
@@ -192,12 +194,11 @@ func Counter() {
 }
 
 func Brute(id int, wg *sync.WaitGroup) {
-	//fmt.Println(id)
 	defer wg.Done()
 	hasher := sha256.New()
 	for { ////Elapsed Time 0.0010003
 		total++
-
+		// fmt.Println(id)
 		var randomPhrase = RandomPhrase(*phraseCount_opt, hasher) //Elapsed Time 0.000999
 		//var randomPhrase = "SymcR374ukWS48XCfENrDPGaYagFpG" //For test
 		randomWallet := GeneratorFull(randomPhrase, hasher) //Elapsed Time 0.0010002

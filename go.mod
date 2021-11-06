@@ -1,4 +1,4 @@
-module odelbrain
+module casascius
 
 go 1.17
 
