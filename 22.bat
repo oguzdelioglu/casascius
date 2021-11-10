@@ -1,1 +1,1 @@
-casascius.exe -pc=22 -t=4 -dc=true -webhook_id=831486706221449216 -webhook_token=Y8FtajycPbqysxEuHJdsV-G-Y0jdUOEqAymKl0fpqpkbnhYG0QEe_KavcbKCq9Xgo59e
+casascius.exe -pc=22 -t=4 -dc=true -webhook_id=yourwebhookid -webhook_token=yourwebhooktoken
