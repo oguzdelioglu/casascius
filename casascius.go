@@ -1,8 +1,7 @@
 package main
 
 import (
-	"crypto/sha256"
-	"database/sql"
+	// "crypto/sha256"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -25,15 +24,14 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
 	"github.com/gosuri/uilive"
+	"github.com/hashicorp/go-memdb"
 	"github.com/jbenet/go-base58"
+	"github.com/minio/sha256-simd"
 
 	boom "github.com/bits-and-blooms/bloom/v3"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var walletList_opt *string = flag.String("w", "wallets.txt", "Wallet File => wallets.txt")
-var walletInsert_opt *bool = flag.Bool("wi", false, "Wallet Insert => (Need Use For First Create)")
 var phraseCount_opt *int = flag.Int("pc", 22, "Phrase Length => 22")
 var output_opt *string = flag.String("o", "falsepositive.txt", "Bloom Filter False Positive => falsepositive.txt")
 var discord_opt *bool = flag.Bool("dc", false, "If Notify With Discord => false")
@@ -51,6 +49,10 @@ type Wallet struct {
 	passphrase          string
 }
 
+type DBAddress struct {
+	address string
+}
+
 var botStartElapsed time.Time
 
 //var start time.Time
@@ -59,10 +61,10 @@ var writer *uilive.Writer
 var total uint64 = 0
 var totalFound uint64 = 0
 var totalBalancedAddress uint64 = 0
-var BalanceAPI string = "https://sochain.com/api/v2/get_address_balance/bitcoin/" //API
 
-var sqliteDatabase *sql.DB
 var sbf *boom.BloomFilter
+var it memdb.ResultIterator
+var txn *memdb.Txn
 
 func main() {
 
@@ -79,7 +81,6 @@ func main() {
 
 	fmt.Println("_____Parameter Settings_____")
 	fmt.Println("Address:", *walletList_opt)
-	fmt.Println("Address Insert:", *walletInsert_opt)
 	fmt.Println("Phrase Count:", *phraseCount_opt)
 	fmt.Println("Output:", *output_opt)
 	fmt.Println("Thread:", *thread_opt)
@@ -102,6 +103,66 @@ func main() {
 		sbf.Add([]byte(address))
 	}
 
+	// // Create the DB schema
+	// schema := &memdb.DBSchema{
+	// 	"addresslist": &memdb.TableSchema{
+	// 		Name: "address",
+	// 		Indexes: map[string]*memdb.IndexSchema{
+	// 			"id": &memdb.IndexSchema{
+	// 				Name:    "id",
+	// 				Unique:  true,
+	// 				Indexer: &memdb.StringFieldIndex{Field: "address"},
+	// 			},
+	// 		},
+	// 	},
+	// }
+	schema := &memdb.DBSchema{
+		Tables: map[string]*memdb.TableSchema{
+			"address": {
+				Name: "address",
+				Indexes: map[string]*memdb.IndexSchema{
+					"id": {
+						Name:    "id",
+						Unique:  true,
+						Indexer: &memdb.StringFieldIndex{Field: "address"},
+					},
+				},
+			},
+		},
+	}
+
+	// Create a new data base
+	db, err := memdb.NewMemDB(schema)
+	if err != nil {
+		panic(err)
+	}
+	// Create a write transaction
+	txn = db.Txn(true)
+
+	for _, address := range addressList {
+		if err := txn.Insert("address", &DBAddress{address}); err != nil {
+			panic(err)
+		}
+	}
+	// Commit the transaction
+	txn.Commit()
+	// Create read-only transaction
+	txn = db.Txn(false)
+	defer txn.Abort()
+
+	// List all the people
+	it, err = txn.Get("address", "id")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("RIPEM 160 List")
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		p := obj.(*DBAddress)
+		fmt.Printf("  %s\n", p.address)
+	}
+
+	// os.Exit(0)
+
 	fmt.Println("Wallets Loaded")
 
 	if *discord_opt && webhook_id != nil && webhook_token != nil {
@@ -112,14 +173,6 @@ func main() {
 		webhook.SendContent("Hello I'm " + hostname)
 	}
 
-	if *walletInsert_opt {
-		createDB()
-	}
-	sqliteDatabase, _ = sql.Open("sqlite3", "database.db") // Open the created SQLite File
-	defer sqliteDatabase.Close()                           // Defer Closing the database
-	if *walletInsert_opt {
-		InsertWalletToDB()
-	}
 	go Counter() //Stat
 	// var wg sync.WaitGroup
 	// for i := 1; i <= *thread_opt; i++ {
@@ -206,7 +259,7 @@ func Brute(id int, wg *sync.WaitGroup) {
 		//fmt.Println(randomWallet.base58BitcoinAddress)
 		//SaveWallet(randomWallet, "test.txt")
 		if sbf.Test([]byte(randomWallet.addressRIPEM160)) {
-			if CheckWallet(sqliteDatabase, randomWallet.addressRIPEM160) {
+			if CheckWallet(randomWallet.addressRIPEM160) {
 				fmt.Println("BINGO: " + randomWallet.passphrase + " " + randomWallet.addressUncompressed)
 				SaveWallet(randomWallet, "balance_wallets.txt", hasher)
 				totalBalancedAddress++
@@ -214,21 +267,31 @@ func Brute(id int, wg *sync.WaitGroup) {
 					webhook.SendContent(randomWallet.passphrase + " " + randomWallet.addressUncompressed)
 				}
 				os.Exit(0)
-			} else {
-				SaveWallet(randomWallet, *output_opt, hasher)
 			}
+			// else {
+			// 	SaveWallet(randomWallet, *output_opt, hasher)
+			// }
 			totalFound++
 		}
 	}
 }
 
+func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
+	hasher.Reset()
+	hasher.Write(input)
+	hash = hasher.Sum(nil)
+	return hash
+}
+
 func RandomPhrase(length int, hasher hash.Hash) string {
 	var charstest string = generateMiniKey(length)
-	// var charstest string = "SG64GZqySYwBm9KxE3wJ29?"
+	//var charstest string = "SG64GZqySYwBm9KxE3wJ29?"
 	// var miniKey, charstest = generateMiniKey(length)
 	//fmt.Println(miniKey, sha[0], charstest)
 	//os.Exit(0)
-	for SHA256(hasher, []byte(charstest))[0] != '\x00' {
+
+	// for SHA256(hasher, []byte(charstest))[0] != '\x00' {
+	for sha256.Sum256([]byte(charstest))[0] != '\x00' {
 		// As long as key doesn't pass typo check, increment it.
 		// fmt.Println(charstest)
 		for i := len(charstest) - 2; i >= 0; i-- {
@@ -283,7 +346,7 @@ func RandomPhrase(length int, hasher hash.Hash) string {
 	// if _, err := f.WriteString(miniKey + "\n"); err != nil {
 	// 	log.Println(err)
 	// }
-
+	//fmt.Println(sha256.Sum256([]byte(charstest)))
 	return charstest[:length]
 }
 func replaceAtIndex(in string, r rune, i int) string {
@@ -309,8 +372,8 @@ func timeTrack(start time.Time, name string) {
 func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
 	// defer timeTrack(time.Now(), "GeneratorFull")
 	// hasher := sha256.New() // SHA256
+	// _, public := btcec.PrivKeyFromBytes(btcec.S256(), SHA256(hasher, []byte(passphrase)))
 	_, public := btcec.PrivKeyFromBytes(btcec.S256(), SHA256(hasher, []byte(passphrase)))
-
 	// Get compressed and uncompressed addresses
 	// caddr, _ := btcutil.NewAddressPubKey(public.SerializeCompressed(), &chaincfg.MainNetParams)
 	uaddr, _ := btcutil.NewAddressPubKey(public.SerializeUncompressed(), &chaincfg.MainNetParams)
@@ -339,12 +402,6 @@ func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
 // }
 
 // SHA256 Hasher function
-func SHA256(hasher hash.Hash, input []byte) (hash []byte) {
-	hasher.Reset()
-	hasher.Write(input)
-	hash = hasher.Sum(nil)
-	return hash
-}
 
 func SaveWallet(walletInfo Wallet, path string, hasher hash.Hash) {
 	fullWallet := GeneratorFull(walletInfo.passphrase, hasher)
@@ -359,76 +416,13 @@ func SaveWallet(walletInfo Wallet, path string, hasher hash.Hash) {
 	}
 }
 
-func CheckWallet(db *sql.DB, hash string) bool {
-	sqlStmt := `SELECT hash FROM address WHERE hash = ?`
-	err := db.QueryRow(sqlStmt, hash).Scan(&hash)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			log.Print(err)
-		}
-		return false
+func CheckWallet(hash string) bool {
+	it, _ = txn.Get("address", "id", hash)
+	if it.Next() != nil {
+		fmt.Printf("Bingo ", hash)
+		return true
 	}
-	return true
-}
-
-func insertaddressBatch(db *sql.DB, hash string) {
-	insertHash := `INSERT INTO address(hash) VALUES ` + hash
-	statement, err := db.Prepare(insertHash)
-
-	//println(insertHash)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	_, err = statement.Exec()
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-}
-
-func createDB() {
-	log.Println("Creating Database...")
-	file, err := os.Create("database.db") // Create SQLite file
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	file.Close()
-	log.Println("DB created")
-}
-
-func InsertWalletToDB() {
-	createTable(sqliteDatabase) // Create Database Tables
-	var tempCodes []string
-	var currentIndex int = 0
-	for _, address := range addressList {
-		tempCodes = append(tempCodes, address) //append(tempCodes, address) //tempCodes = append(tempCodes, AddressToRIPEM160(address))
-		if currentIndex == 5000 {
-			code := `("` + strings.Join(tempCodes, `") , ("`) + `")`
-			insertaddressBatch(sqliteDatabase, code)
-			tempCodes = nil
-			currentIndex = 0
-		}
-		currentIndex++
-	}
-	if len(tempCodes) <= 5000 {
-		insertaddressBatch(sqliteDatabase, `("`+strings.Join(tempCodes, `") , ("`)+`")`)
-		tempCodes = nil
-	}
-	fmt.Println("Wallets Inserted Databased.")
-}
-
-func createTable(db *sql.DB) {
-	createHashTable := `CREATE TABLE "address" (
-		"id"	INTEGER UNIQUE,
-		"hash"	TEXT NOT NULL UNIQUE,
-		PRIMARY KEY("id" AUTOINCREMENT)
-	);` // SQL Statement for Create Table
-	log.Println("Creating table...")
-	statement, err := db.Prepare(createHashTable) // Prepare SQL Statement
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	statement.Exec() // Execute SQL Statements
-	log.Println("Table created")
+	return false
 }
 
 func AddressToRIPEM160(address string) string {
@@ -436,16 +430,4 @@ func AddressToRIPEM160(address string) string {
 	end := len(baseBytes) - 4
 	hash := baseBytes[0:end]
 	return hex.EncodeToString(hash)[2:]
-}
-
-func insertaddress(db *sql.DB, hash string) {
-	insertHash := `INSERT INTO address(hash) VALUES (?)`
-	statement, err := db.Prepare(insertHash)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	_, err = statement.Exec(hash)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
 }

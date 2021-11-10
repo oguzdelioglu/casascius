@@ -17,9 +17,14 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/gosuri/uilive v0.0.4 // indirect
 	github.com/haltingstate/secp256k1-go v0.0.0-20151224084235-572209b26df6 // indirect
+	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
+	github.com/hashicorp/go-memdb v1.3.2 // indirect
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/jbenet/go-base58 v0.0.0-20150317085156-6237cf65f3a6 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.4 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
+	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/sethvargo/go-diceware v0.2.1 // indirect
 	github.com/stevenroose/go-bitcoin-core-rpc v0.0.0-20181021223752-1f5e57e12ba1 // indirect
 	github.com/tylertreat/BoomFilters v0.0.0-20210315201527-1a82519a3e43 // indirect
