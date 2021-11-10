@@ -33,7 +33,8 @@ import (
 
 var walletList_opt *string = flag.String("w", "wallets.txt", "Wallet File => wallets.txt")
 var phraseCount_opt *int = flag.Int("pc", 22, "Phrase Length => 22")
-var output_opt *string = flag.String("o", "falsepositive.txt", "Bloom Filter False Positive => falsepositive.txt")
+
+// var output_opt *string = flag.String("o", "falsepositive.txt", "Bloom Filter False Positive => falsepositive.txt")
 var discord_opt *bool = flag.Bool("dc", false, "If Notify With Discord => false")
 var webhook_id *string = flag.String("webhook_id", "", "Discord Webhook ID => webhook_id")
 var webhook_token *string = flag.String("webhook_token", "", "Discord Webhook Token => webhook_token")
@@ -82,7 +83,7 @@ func main() {
 	fmt.Println("_____Parameter Settings_____")
 	fmt.Println("Address:", *walletList_opt)
 	fmt.Println("Phrase Count:", *phraseCount_opt)
-	fmt.Println("Output:", *output_opt)
+	// fmt.Println("Output:", *output_opt)
 	fmt.Println("Thread:", *thread_opt)
 	fmt.Println("Log Output:", *verbose_opt)
 	fmt.Println("_____Info_____")
