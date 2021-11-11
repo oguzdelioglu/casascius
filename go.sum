@@ -79,6 +79,8 @@ github.com/stevenroose/go-bitcoin-core-rpc v0.0.0-20181021223752-1f5e57e12ba1 h1
 github.com/stevenroose/go-bitcoin-core-rpc v0.0.0-20181021223752-1f5e57e12ba1/go.mod h1:rn5skMzkhZBpniGygSlL5St7wWW0CkwTpVQQxuU6atI=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/tgebhart/goparsebtc v0.0.0-20160322213221-f92586393b0d h1:QeKOJD/jgXUIXvB3RqLxSBUrGH4tUK0hTd0SWagHpaQ=
+github.com/tgebhart/goparsebtc v0.0.0-20160322213221-f92586393b0d/go.mod h1:36l93z6tQ9xtuNCC71D1cIb5SJKA1K88Ti42ddbnFvA=
 github.com/tylertreat/BoomFilters v0.0.0-20210315201527-1a82519a3e43 h1:QEePdg0ty2r0t1+qwfZmQ4OOl/MB2UXIeJSpIZv56lg=
 github.com/tylertreat/BoomFilters v0.0.0-20210315201527-1a82519a3e43/go.mod h1:OYRfF6eb5wY9VRFkXJH8FFBi3plw2v+giaIu7P054pM=
 github.com/vsergeev/btckeygenie v1.1.0 h1:igWgrLq6nauOsAxz3LQSvLAkBrM9MJZGIte8zMQaW9k=

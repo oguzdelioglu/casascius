@@ -27,6 +27,7 @@ require (
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/sethvargo/go-diceware v0.2.1 // indirect
 	github.com/stevenroose/go-bitcoin-core-rpc v0.0.0-20181021223752-1f5e57e12ba1 // indirect
+	github.com/tgebhart/goparsebtc v0.0.0-20160322213221-f92586393b0d // indirect
 	github.com/tylertreat/BoomFilters v0.0.0-20210315201527-1a82519a3e43 // indirect
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect

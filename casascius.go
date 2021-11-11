@@ -2,6 +2,7 @@ package main
 
 import (
 	// "crypto/sha256"
+
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -23,10 +24,11 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcutil"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/gosuri/uilive"
 	"github.com/hashicorp/go-memdb"
-	"github.com/jbenet/go-base58"
 	"github.com/minio/sha256-simd"
+	"golang.org/x/crypto/ripemd160"
 
 	boom "github.com/bits-and-blooms/bloom/v3"
 )
@@ -51,7 +53,8 @@ type Wallet struct {
 }
 
 type DBAddress struct {
-	address string
+	addressByte []byte
+	address     string
 }
 
 var botStartElapsed time.Time
@@ -95,15 +98,22 @@ func main() {
 	sbf = boom.NewWithEstimates(uint(addressCount), 0.000001) //0.00000000000000000001  0.0000001
 
 	for index, address := range addressList {
-		addressList[index] = AddressToRIPEM160(address)
+		//addressList[index] = AddressToRIPEM160(address)
+		addressList[index] = address
+		// test, _ := hex.DecodeString(AddressToRIPEM160(address))
+		// fmt.Printf("%v %v %v\n", address, test, []byte(address))
 	}
+	//os.Exit(0)
 	sort.Strings(addressList)
 
 	for _, address := range addressList {
-		//fmt.Println(address)
+		//test := TestAddressToRIPEM160(address)
+		//test, _ := hex.DecodeString(AddressToRIPEM160(address))
+
+		//fmt.Printf("%v %v\n", address, []byte(address))
 		sbf.Add([]byte(address))
 	}
-
+	//os.Exit(0)
 	// // Create the DB schema
 	// schema := &memdb.DBSchema{
 	// 	"addresslist": &memdb.TableSchema{
@@ -119,13 +129,18 @@ func main() {
 	// }
 	schema := &memdb.DBSchema{
 		Tables: map[string]*memdb.TableSchema{
-			"address": {
-				Name: "address",
+			"addressList": {
+				Name: "addressList",
 				Indexes: map[string]*memdb.IndexSchema{
 					"id": {
 						Name:    "id",
 						Unique:  true,
 						Indexer: &memdb.StringFieldIndex{Field: "address"},
+					},
+					"addressByte": {
+						Name:    "addressByte",
+						Unique:  false,
+						Indexer: &memdb.StringFieldIndex{Field: "addressByte"},
 					},
 				},
 			},
@@ -141,7 +156,7 @@ func main() {
 	txn = db.Txn(true)
 
 	for _, address := range addressList {
-		if err := txn.Insert("address", &DBAddress{address}); err != nil {
+		if err := txn.Insert("addressList", &DBAddress{addressByte: []byte(address), address: AddressToRIPEM160(address)}); err != nil {
 			panic(err)
 		}
 	}
@@ -152,15 +167,16 @@ func main() {
 	defer txn.Abort()
 
 	// List all the people
-	it, err = txn.Get("address", "id")
+	it, err = txn.Get("addressList", "addressByte")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("RIPEM 160 List")
-	for obj := it.Next(); obj != nil; obj = it.Next() {
-		p := obj.(*DBAddress)
-		fmt.Printf("  %s\n", p.address)
-	}
+	//fmt.Println("RIPEM 160 List")
+	//for obj := it.Next(); obj != nil; obj = it.Next() {
+	//p := obj.(*DBAddress)
+	//fmt.Printf("%v %v\n", p.address, p.addressByte)
+	//fmt.Printf("mystr:\t %v \n", []byte(p.ripem160Byte))
+	//}
 
 	// os.Exit(0)
 
@@ -254,18 +270,18 @@ func Brute(id int, wg *sync.WaitGroup) {
 		total++
 		// fmt.Println(id)
 		var randomPhrase = RandomPhrase(*phraseCount_opt, hasher) //Elapsed Time 0.000999
-		//var randomPhrase = "SymcR374ukWS48XCfENrDPGaYagFpG" //For test
-		randomWallet := GeneratorFull(randomPhrase, hasher) //Elapsed Time 0.0010002
+		//var randomPhrase = "SymcR374ukWS48XCfENrDPGaYagFpG"      //For test
+		randomWallet := GeneratorRIPEMD160(randomPhrase, hasher) //Elapsed Time 0.0010002
 		// SaveWallet(randomWallet, "balance_wallets.txt", hasher) //Test
-		//fmt.Println(randomWallet.base58BitcoinAddress)
+		//fmt.Printf("%v\n", randomWallet)
 		//SaveWallet(randomWallet, "test.txt")
-		if sbf.Test([]byte(randomWallet.addressRIPEM160)) {
-			if CheckWallet(randomWallet.addressRIPEM160) {
-				fmt.Println("BINGO: " + randomWallet.passphrase + " " + randomWallet.addressUncompressed)
-				SaveWallet(randomWallet, "balance_wallets.txt", hasher)
+		if sbf.Test(randomWallet) {
+			if CheckWallet(GeneratorFull(randomPhrase, hasher).addressRIPEM160) {
+				fmt.Println("BINGO: " + randomPhrase)
+				SaveWallet(randomPhrase, "balance_wallets.txt", hasher)
 				totalBalancedAddress++
 				if *discord_opt && webhook_id != nil && webhook_token != nil {
-					webhook.SendContent(randomWallet.passphrase + " " + randomWallet.addressUncompressed)
+					webhook.SendContent(randomPhrase)
 				}
 				os.Exit(0)
 			}
@@ -370,6 +386,16 @@ func timeTrack(start time.Time, name string) {
 	log.Printf("%s took %s", name, elapsed)
 }
 
+func GeneratorRIPEMD160(passphrase string, hasher hash.Hash) []byte {
+	_, public := btcec.PrivKeyFromBytes(btcec.S256(), SHA256(hasher, []byte(passphrase)))
+	//hash160 := btcutil.Hash160(public.SerializeUncompressed())
+	// fmt.Printf("%v\n", public.SerializeUncompressed())
+	//hash160 := btcutil.Hash160(public.SerializeUncompressed())
+	hash160, _ := btcutil.NewAddressPubKey(public.SerializeUncompressed(), &chaincfg.MainNetParams)
+	//fmt.Printf("%v %v\n", hash160.EncodeAddress(), []byte(hash160.EncodeAddress()))
+	return []byte(hash160.EncodeAddress())
+}
+
 func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
 	// defer timeTrack(time.Now(), "GeneratorFull")
 	// hasher := sha256.New() // SHA256
@@ -385,6 +411,22 @@ func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
 	return Wallet{addressRIPEM160: AddressToRIPEM160(uadrEncoded), addressUncompressed: uadrEncoded, passphrase: passphrase} // Send line to output channel
 	// return Wallet{addressUncompressed: uaddr.EncodeAddress(), addressCompressed: caddr.EncodeAddress(), passphrase: passphrase} // Send line to output channel
 }
+
+// func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
+// 	// defer timeTrack(time.Now(), "GeneratorFull")
+// 	// hasher := sha256.New() // SHA256
+// 	// _, public := btcec.PrivKeyFromBytes(btcec.S256(), SHA256(hasher, []byte(passphrase)))
+// 	_, public := btcec.PrivKeyFromBytes(btcec.S256(), SHA256(hasher, []byte(passphrase)))
+// 	// Get compressed and uncompressed addresses
+// 	// caddr, _ := btcutil.NewAddressPubKey(public.SerializeCompressed(), &chaincfg.MainNetParams)
+// 	uaddr, _ := btcutil.NewAddressPubKey(public.SerializeUncompressed(), &chaincfg.MainNetParams)
+// 	uadrEncoded := uaddr.EncodeAddress()
+// 	if *verbose_opt {
+// 		fmt.Println(passphrase, uadrEncoded) //, AddressToRIPEM160(uaddr.EncodeAddress())
+// 	}
+// 	return Wallet{addressRIPEM160: AddressToRIPEM160(uadrEncoded), addressUncompressed: uadrEncoded, passphrase: passphrase} // Send line to output channel
+// 	// return Wallet{addressUncompressed: uaddr.EncodeAddress(), addressCompressed: caddr.EncodeAddress(), passphrase: passphrase} // Send line to output channel
+// }
 
 // func GeneratorFull(passphrase string) Wallet {
 // 	// defer timeTrack(time.Now(), "GeneratorFull")
@@ -404,8 +446,8 @@ func GeneratorFull(passphrase string, hasher hash.Hash) Wallet {
 
 // SHA256 Hasher function
 
-func SaveWallet(walletInfo Wallet, path string, hasher hash.Hash) {
-	fullWallet := GeneratorFull(walletInfo.passphrase, hasher)
+func SaveWallet(passphrase string, path string, hasher hash.Hash) {
+	fullWallet := GeneratorFull(passphrase, hasher)
 	f, err := os.OpenFile(path,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -418,17 +460,31 @@ func SaveWallet(walletInfo Wallet, path string, hasher hash.Hash) {
 }
 
 func CheckWallet(hash string) bool {
-	it, _ = txn.Get("address", "id", hash)
+	//fmt.Printf("%v", hash)
+	it, err := txn.Get("addressList", "id", hash)
+	// fmt.Printf("%v", hash)
+	if err != nil {
+		fmt.Printf("Error %v", err)
+		return false
+	}
 	if it.Next() != nil {
-		fmt.Printf("Bingo ", hash)
+		//fmt.Printf("Bingo %v", hash)
 		return true
 	}
 	return false
 }
 
-func AddressToRIPEM160(address string) string {
+func TestAddressToRIPEM160(address string) string {
 	baseBytes := base58.Decode(address)
 	end := len(baseBytes) - 4
 	hash := baseBytes[0:end]
 	return hex.EncodeToString(hash)[2:]
+}
+
+func AddressToRIPEM160(address string) string {
+	hasher := ripemd160.New()
+	hasher.Write([]byte(address))
+	hashBytes := hasher.Sum(nil)
+	hashString := fmt.Sprintf("%x", hashBytes)
+	return hashString
 }
