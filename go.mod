@@ -14,6 +14,9 @@ require (
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
+	github.com/ecies/go v1.0.1 // indirect
+	github.com/fomichev/secp256k1 v0.0.0-20180413221153-00116ff8c62f // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/gosuri/uilive v0.0.4 // indirect
 	github.com/haltingstate/secp256k1-go v0.0.0-20151224084235-572209b26df6 // indirect
@@ -25,6 +28,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-sqlite3 v1.14.8 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
+	github.com/pkg/errors v0.8.1 // indirect
 	github.com/sethvargo/go-diceware v0.2.1 // indirect
 	github.com/stevenroose/go-bitcoin-core-rpc v0.0.0-20181021223752-1f5e57e12ba1 // indirect
 	github.com/tgebhart/goparsebtc v0.0.0-20160322213221-f92586393b0d // indirect
